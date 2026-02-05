@@ -1,0 +1,126 @@
+.invPage{
+  min-height: 100vh;
+  padding: 28px;
+  background: #f5f7fb;
+  display: grid;
+  place-items: start center;
+}
+
+.invCard{
+  width: min(960px, 96vw);
+  background: #fff;
+  border: 1px solid rgba(20, 25, 40, 0.10);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(16, 20, 40, 0.10);
+  padding: 18px;
+}
+
+.invTop{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.backBtn{
+  border: 1px solid rgba(20, 25, 40, 0.14);
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.invH1{
+  margin: 10px 0 14px;
+  font-size: 28px;
+  font-weight: 900;
+  color: #141928;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field{
+  border: 1px solid rgba(20, 25, 40, 0.10);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fbfcff;
+}
+
+.field.wide{ grid-column: 1 / -1; }
+
+.label{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(20, 25, 40, 0.55);
+  margin-bottom: 6px;
+}
+
+.value{
+  font-weight: 800;
+  color: #141928;
+}
+
+.receiptSection{
+  margin-top: 16px;
+  border-top: 1px solid rgba(20, 25, 40, 0.08);
+  padding-top: 14px;
+}
+
+.muted{ opacity: 0.7; font-weight: 700; }
+
+.linkBtn{
+  display:inline-block;
+  margin: 6px 0 12px;
+  font-weight: 900;
+  text-decoration: none;
+  color: #5b5ef2;
+}
+
+.receiptImg{
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 14px;
+  border: 1px solid rgba(20, 25, 40, 0.10);
+  background: #fff;
+}
+
+.receiptPdf{
+  width: 100%;
+  height: 520px;
+  border-radius: 14px;
+  border: 1px solid rgba(20, 25, 40, 0.10);
+}
+
+.pill{
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid rgba(20, 25, 40, 0.12);
+  background: #fff;
+}
+
+.pill.unpaid{ background: rgba(255, 40, 80, 0.12); }
+.pill.pending{ background: rgba(255, 180, 0, 0.16); }
+.pill.paid{ background: rgba(60, 200, 120, 0.16); }
+.pill.archived{ background: rgba(140, 150, 170, 0.20); }
+
+.errorBox{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 40, 80, 0.10);
+  border: 1px solid rgba(255, 40, 80, 0.18);
+  color: #a2223f;
+  font-weight: 900;
+}
+
+@media (max-width: 720px){
+  .grid{ grid-template-columns: 1fr; }
+}

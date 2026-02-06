@@ -2,6 +2,8 @@ import express from "express";
 import Invoice from "../models/Invoice.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import mongoose from "mongoose";
+import { sendInvoiceEmail } from "../lib/mailer.js";
+
 
 
 const router = express.Router();
@@ -101,5 +103,48 @@ router.post("/", async (req, res) => {
 
   res.status(201).json({ invoice });
 });
+
+router.post("/:id/send", async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: "Invalid invoice id" });
+  }
+
+  const invoice = await Invoice.findOne({ _id: id, user: req.user.id });
+  if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+  // parse recipientEmails (comma separated)
+  const raw = (invoice.recipientEmails || "").trim();
+  const recipients = raw
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (recipients.length === 0) {
+    return res.status(400).json({ error: "No recipientEmails provided for this invoice" });
+  }
+
+  // basic safety limits
+  if (recipients.length > 5) {
+    return res.status(400).json({ error: "Too many recipients (max 5)" });
+  }
+
+  // PayPal link with auto-filled amount (PayPal.Me style)
+  let paypalLink = "";
+  const base = process.env.PAYPAL_ME_BASE;
+  if (base) {
+    paypalLink = `${base.replace(/\/$/, "")}/${Number(invoice.total).toFixed(2)}`;
+  }
+
+  await sendInvoiceEmail({
+    to: recipients.join(","),
+    invoice,
+    paypalLink,
+  });
+
+  res.json({ ok: true, sentTo: recipients });
+});
+
 
 export default router;

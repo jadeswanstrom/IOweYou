@@ -1,0 +1,48 @@
+/* Settings.css — designed to render inside AppLayout's right panel */
+
+.settingsWrap{
+  max-width: 720px;
+}
+
+.settingsHeader{
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #fbfcff;
+}
+
+.settingsHeaderTitle{
+  font-weight: 900;
+  color: var(--text);
+}
+
+.settingsHeaderSub{
+  margin-top: 6px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.settingsBody{
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.settingsHelp{
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* success message */
+.sSuccess{
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(126, 231, 152, 0.18);
+  border: 1px solid rgba(126, 231, 152, 0.32);
+  color: #1b7a3b;
+  font-weight: 900;
+  font-size: 13px;
+}

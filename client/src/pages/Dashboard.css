@@ -193,8 +193,9 @@
   border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: var(--shadow);
-  overflow: hidden;
+  overflow: visible;
 }
+
 
 .tableHeader, .row{
   display: grid;
@@ -289,10 +290,70 @@
   font-weight: 700;
 }
 
-/* Responsive */
 @media (max-width: 980px){
-  .dash{ grid-template-columns: 1fr; }
-  .sidebar{ display: none; }
+  .dash{
+    grid-template-columns: 1fr;
+  }
+
+  
+  .main{
+    padding: 18px 16px;
+    padding-bottom: 110px;
+  }
+
+ 
+  .sidebar{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+
+    padding: 12px 12px 14px;
+    background: rgba(255,255,255,0.92);
+    border-top: 1px solid var(--border);
+    border-right: 0;
+    backdrop-filter: blur(10px);
+  }
+
+  
+  .newInvoiceBtn{
+    height: 50px;
+    border-radius: 14px;
+    font-size: 15px;
+  }
+
+  
+  .nav{
+    margin-top: 0;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .navItem{
+    flex: 1;
+    height: 46px;
+    justify-content: center;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    background: #fff;
+  }
+
+  .navItem .navIcon{
+    width: auto;
+  }
+
+  
+  .navItem{
+    gap: 8px;
+  }
+
+
   .tableHeader, .row{
     grid-template-columns: 2.2fr 1.2fr 1fr 1fr 1fr 54px;
   }
@@ -414,55 +475,102 @@
 }
 
 .mBtn.primary{
-  border: 0;
-  background: linear-gradient(180deg, var(--purple-2), var(--purple));
-  color: #fff;
-  box-shadow: 0 12px 28px rgba(91, 94, 242, 0.22);
+  background: #ddc4ff;
 }
 
 .mBtn.ghost{
-  background: #fff;
+  background: #f7eeff;
 }
 
 .row.clickable { cursor: pointer; }
 .row.clickable:hover { background: rgba(91, 94, 242, 0.06); }
 .clip { margin-left: 6px; }
 
-.actionMenu {
+
+.actionMenu{
   position: absolute;
-  right: 6px;
-  top: 42px;
-  width: 170px;
-  background: #fff;
-  border: 1px solid rgba(20, 25, 40, 0.12);
-  border-radius: 12px;
-  box-shadow: 0 18px 40px rgba(16, 20, 40, 0.12);
-  padding: 6px;
-  z-index: 20;
+  right: 0;
+  top: 44px;
+  width: 180px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 60;
+  display: grid;
+  gap: 6px;
 }
 
-.actionMenu button {
+.actionMenu button{
   width: 100%;
-  text-align: left;
+  height: 38px;
   border: 0;
-  background: transparent;
-  padding: 10px 10px;
   border-radius: 10px;
+  background: transparent;
   cursor: pointer;
+  text-align: left;
+  padding: 0 10px;
   font-weight: 800;
+  color: var(--text);
 }
 
-.actionMenu button:hover {
-  background: rgba(91, 94, 242, 0.08);
+.actionMenu button:hover{
+  background: rgba(0,0,0,0.04);
+}
+
+.actionMenu button:first-child{
+  color: var(--purple);
 }
 
 
-.card,
-.rows,
-.row {
-  overflow: visible !important;
+.modalBackdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 30, 0.35);
+  z-index: 200;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 18px;
 }
 
-.actionMenu {
-  z-index: 9999;
+
+.modal{
+  width: min(92vw, 520px);
+  margin-top: 18px;
+
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  /* KEY: constrain height so inner area can scroll */
+  max-height: calc(100vh - 36px);
+}
+
+/* header stays fixed */
+.modalTop{
+  flex: 0 0 auto;
+}
+
+.modalForm{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mActions{
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding: 12px 0 8px;
+  border-top: 1px solid var(--border);
 }

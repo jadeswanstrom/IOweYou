@@ -15,15 +15,19 @@ export function makeTransport() {
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465, // true for 465, false for 587/25
+    secure: port === 465,
     auth: { user, pass },
   });
 }
 
-export async function sendInvoiceEmail({ to, invoice, paypalLink }) {
+export async function sendInvoiceEmail({ to, invoice, paypalLink, shareUrl }) {
   const from = process.env.FROM_EMAIL || "no-reply@ioweyou.app";
 
   const subject = `Invoice: ${invoice.name} — $${Number(invoice.total).toFixed(2)}`;
+
+  const shareLine = shareUrl
+    ? `<p><strong>View invoice:</strong> <a href="${shareUrl}" target="_blank" rel="noreferrer">${shareUrl}</a></p>`
+    : "";
 
   const receiptLine = invoice.receipt?.url
     ? `<p><strong>Receipt:</strong> <a href="${invoice.receipt.url}" target="_blank" rel="noreferrer">View receipt</a></p>`
@@ -45,6 +49,7 @@ export async function sendInvoiceEmail({ to, invoice, paypalLink }) {
 
       ${invoice.notes ? `<p><strong>Notes:</strong><br/>${invoice.notes}</p>` : ""}
 
+      ${shareLine}
       ${receiptLine}
       ${paypalLine}
 

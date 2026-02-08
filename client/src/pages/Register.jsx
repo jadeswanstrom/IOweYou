@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useContext } from "react";
 import "./Register.css";
+import eyeOpen from "../assets/eye.png";
+import eyeClosed from "../assets/eye-off.png";
 
 export default function Register() {
   const nav = useNavigate();
@@ -112,13 +114,18 @@ export default function Register() {
                 required
               />
               <button
-                type="button"
-                className="eyeBtn"
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? "Hide password" : "Show password"}
+              type="button"
+              className="eyeBtn"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? "Hide password" : "Show password"}
               >
-                {showPw ? "🙈" : "👁️"}
+              <img
+              src={showPw ? eyeClosed : eyeOpen}
+              alt={showPw ? "Hide password" : "Show password"}
+              />
+
               </button>
+
             </div>
           </label>
 
@@ -134,13 +141,18 @@ export default function Register() {
                 required
               />
               <button
-                type="button"
-                className="eyeBtn"
-                onClick={() => setShowConfirmPw((v) => !v)}
-                aria-label={showConfirmPw ? "Hide password" : "Show password"}
+              type="button"
+              className="eyeBtn"
+              onClick={() => setShowConfirmPw((v) => !v)}
+              aria-label={showConfirmPw ? "Hide password" : "Show password"}
               >
-                {showConfirmPw ? "🙈" : "👁️"}
+              <img
+              src={showConfirmPw ? eyeClosed : eyeOpen}
+              alt={showConfirmPw ? "Hide password" : "Show password"}
+              />
+
               </button>
+
             </div>
           </label>
 

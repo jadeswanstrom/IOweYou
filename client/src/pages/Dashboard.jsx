@@ -1,9 +1,7 @@
-import React, { useContext, useMemo, useRef, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { AuthContext } from "../context/AuthContext";
+import React, { useMemo, useState, useEffect, useContext } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import "./Dashboard.css";
-
+import { AuthContext } from "../context/AuthContext";
 
 const TABS = ["All Invoices", "Unpaid", "Pending", "Paid", "Archived"];
 
@@ -14,31 +12,54 @@ function formatMoney(n) {
 
 function formatDate(d) {
   const dt = new Date(d);
-  return dt.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  return dt.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
-function initialsFromUser(user) {
-  const first = user?.firstName?.[0] || user?.name?.[0] || "U";
-  const last = user?.lastName?.[0] || user?.name?.split(" ")?.[1]?.[0] || "";
-  return (first + last).toUpperCase();
+function parseRecipients(raw) {
+  return String(raw || "")
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function joinEmailLines(lines) {
+  return lines.filter((l) => l !== null && l !== undefined).join("\r\n");
+}
+
+function buildMailto({ toList, subject, body }) {
+  const to = (toList || []).join(",");
+  const q = [];
+  if (subject) q.push(`subject=${encodeURIComponent(subject)}`);
+  if (body) q.push(`body=${encodeURIComponent(body)}`);
+  return `mailto:${to}${q.length ? `?${q.join("&")}` : ""}`;
 }
 
 export default function Dashboard() {
-  const { user, logout } = useContext(AuthContext);
   const nav = useNavigate();
+  const location = useLocation();
+
+  const { user } = useContext(AuthContext);
+
+  const senderName =
+    user?.name ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    "Your friend";
 
   const [activeTab, setActiveTab] = useState("All Invoices");
-  const [sidebarActive, setSidebarActive] = useState("Invoices");
-
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef(null);
 
   // invoices (real)
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
 
-  // modal
+  // row action menu
+  const [menuOpenId, setMenuOpenId] = useState(null);
+
+  // modal (new invoice)
   const [modalOpen, setModalOpen] = useState(false);
   const [invName, setInvName] = useState("");
   const [invClientName, setInvClientName] = useState("");
@@ -49,37 +70,25 @@ export default function Dashboard() {
   const [invDate, setInvDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptName, setReceiptName] = useState("");
 
+  // share modal
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [mailtoUrl, setMailtoUrl] = useState("");
 
-  const displayName =
-    user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "User";
-
-  
+  // close action menu on outside click
   useEffect(() => {
-    function onDocClick(e) {
-      if (!profileRef.current) return;
-      if (!profileRef.current.contains(e.target)) setProfileOpen(false);
+    function close(e) {
+      if (e.target.closest(".actionMenu")) return;
+      if (e.target.closest(".dots")) return;
+      setMenuOpenId(null);
     }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
   }, []);
-
-const [menuOpenId, setMenuOpenId] = useState(null);
-
-useEffect(() => {
-  function close(e) {
-    if (e.target.closest(".actionMenu")) return;
-    if (e.target.closest(".dots")) return;
-
-    setMenuOpenId(null);
-  }
-
-  document.addEventListener("mousedown", close);
-  return () => document.removeEventListener("mousedown", close);
-}, []);
-
 
   // load invoices
   async function fetchInvoices() {
@@ -100,53 +109,103 @@ useEffect(() => {
   }, []);
 
   const filteredInvoices = useMemo(() => {
-    if (activeTab === "All Invoices") return invoices;
-    return invoices.filter((inv) => inv.status === activeTab);
-  }, [activeTab, invoices]);
-
-  function onLogout() {
-    logout();
-    nav("/login");
+  // All Invoices should NOT include archived
+  if (activeTab === "All Invoices") {
+    return invoices.filter((inv) => inv.status !== "Archived");
   }
 
- function openNewInvoice() {
-  setSaveErr("");
-  setInvName("");
-  setInvClientName("");
-  setInvRecipientEmails("");
-  setInvNotes("");
-  setInvTotal("");
-  setInvStatus("Unpaid");
-  setInvDate(new Date().toISOString().slice(0, 10));
+  // Archived tab (and others) show only matching status
+  return invoices.filter((inv) => inv.status === activeTab);
+}, [activeTab, invoices]);
 
-  setReceiptFile(null);
-  setReceiptName("");
 
-  setModalOpen(true);
-}
-
-async function updateStatus(invoiceId, newStatus) {
-  try {
-    const { data } = await api.patch(`/invoices/${invoiceId}`, {
-      status: newStatus,
-    });
-
-    // update local list so tabs re-filter instantly
-    setInvoices((prev) =>
-      prev.map((inv) => (inv._id === invoiceId ? data.invoice : inv))
-    );
-
-    setMenuOpenId(null);
-  } catch (e) {
-    console.error(e);
-    alert(e?.response?.data?.error || e?.message || "Failed to update status");
+  function openNewInvoice() {
+    setSaveErr("");
+    setInvName("");
+    setInvClientName("");
+    setInvRecipientEmails("");
+    setInvNotes("");
+    setInvTotal("");
+    setInvStatus("Unpaid");
+    setInvDate(new Date().toISOString().slice(0, 10));
+    setReceiptFile(null);
+    setReceiptName("");
+    setModalOpen(true);
   }
-}
 
+  // If AppLayout navigates to /invoices with state: { openNew: true }
+  useEffect(() => {
+    if (location.state?.openNew) {
+      openNewInvoice();
+      nav("/invoices", { replace: true, state: null }); // clear state
+    }
+  }, [location.state, nav]);
 
+  async function updateStatus(invoiceId, newStatus) {
+    try {
+      const { data } = await api.patch(`/invoices/${invoiceId}`, { status: newStatus });
 
-  async function createInvoice(e) {
-    e.preventDefault();
+      setInvoices((prev) => prev.map((inv) => (inv._id === invoiceId ? data.invoice : inv)));
+      setMenuOpenId(null);
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || e?.message || "Failed to update status");
+    }
+  }
+
+  // Shares an existing invoice again (uses the invoice’s own saved fields)
+  async function shareExistingInvoice(inv) {
+    try {
+      const pubRes = await api.post(`/invoices/${inv._id}/publish`);
+      const token = pubRes.data.shareToken;
+
+      const url = `${window.location.origin}/pay/${token}`;
+
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+      }
+
+      const recipients = parseRecipients(inv.recipientEmails);
+      const amountStr = Number(inv.total || 0).toFixed(2);
+      const currency = (inv.currency || user?.currency || "USD").toUpperCase();
+
+      const subject = `Invoice from ${senderName}: ${inv.name?.trim() || "Invoice"} — $${amountStr}`;
+
+      const reason = (inv.notes || "").trim() || inv.name?.trim() || "this invoice";
+
+      const lines = [
+        `Hi${inv.client?.trim() ? ` ${inv.client.trim()}` : ""},`,
+        "",
+        `Please kindly receive this invoice from ${senderName} for ${reason}.`,
+        "",
+        `Invoice: ${inv.name?.trim() || "Invoice"}`,
+        `Amount due: ${amountStr} ${currency}`,
+        "",
+        "You can view and pay the invoice here:",
+        url,
+        "",
+        inv.notes?.trim() ? `Notes:\r\n${inv.notes.trim()}` : null,
+        "",
+        "If you have any questions, feel free to reply to this email.",
+        "",
+        "Thanks,",
+        "I Owe You App - Invoicing Made Simple",
+      ];
+
+      const body = joinEmailLines(lines);
+      const mailto = buildMailto({ toList: recipients, subject, body });
+
+      setShareUrl(url);
+      setMailtoUrl(mailto);
+      setShareOpen(true);
+
+      setMenuOpenId(null);
+    } catch (e) {
+      alert(e?.response?.data?.error || e?.message || "Failed to generate share link");
+    }
+  }
+
+  async function createInvoice(mode) {
     setSaveErr("");
 
     if (!invName.trim() || !invClientName.trim() || invTotal === "") {
@@ -154,157 +213,155 @@ async function updateStatus(invoiceId, newStatus) {
       return;
     }
 
-   setSaving(true);
-try {
-  let receipt = undefined;
+    setSaving(true);
+    try {
+      // upload receipt if provided
+      let receipt = undefined;
 
-  // upload file 
-  if (receiptFile) {
-    const fd = new FormData();
-    fd.append("file", receiptFile);
+      if (receiptFile) {
+        const fd = new FormData();
+        fd.append("file", receiptFile);
 
-    const up = await api.post("/uploads/receipt", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+        const up = await api.post("/uploads/receipt", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
 
-    receipt = {
-      url: up.data.url,
-      publicId: up.data.publicId,
-      originalName: up.data.originalName,
-      resourceType: up.data.resourceType,
-    };
+        receipt = {
+          url: up.data.url,
+          publicId: up.data.publicId,
+          originalName: up.data.originalName,
+          resourceType: up.data.resourceType,
+        };
+      }
+
+      const payload = {
+        name: invName.trim(),
+        client: invClientName.trim(),
+        recipientEmails: invRecipientEmails.trim(),
+        notes: invNotes.trim(),
+        total: Number(invTotal),
+        status: invStatus,
+        date: invDate,
+        receipt,
+      };
+
+      const { data } = await api.post("/invoices", payload);
+
+      // add to list
+      setInvoices((prev) => [data.invoice, ...prev]);
+      setModalOpen(false);
+
+      // "Create & Share" = publish + show link + open email app option
+      if (mode === "send") {
+        const pubRes = await api.post(`/invoices/${data.invoice._id}/publish`);
+        const token = pubRes.data.shareToken;
+
+        const url = `${window.location.origin}/pay/${token}`;
+
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(url);
+        }
+
+        const recipients = parseRecipients(invRecipientEmails);
+        const amountStr = Number(invTotal || 0).toFixed(2);
+        const currency = (user?.currency || "USD").toUpperCase();
+
+        const subject = `Invoice from ${senderName}: ${invName.trim()} — $${amountStr}`;
+
+        const reason = invNotes.trim() || invName.trim() || "this invoice";
+
+        const lines = [
+          `Hi${invClientName?.trim() ? ` ${invClientName.trim()}` : ""},`,
+          "",
+          `Please kindly receive this invoice from ${senderName} for ${reason}.`,
+          "",
+          `Invoice: ${invName.trim()}`,
+          `Amount due: ${amountStr} ${currency}`,
+          "",
+          "You can view and pay the invoice here:",
+          url,
+          "",
+          invNotes?.trim() ? `Notes:\r\n${invNotes.trim()}` : null,
+          "",
+          "If you have any questions, feel free to reply to this email.",
+          "",
+          "Thanks,",
+          senderName,
+        ];
+
+        const body = joinEmailLines(lines);
+        const mailto = buildMailto({ toList: recipients, subject, body });
+
+        setShareUrl(url);
+        setMailtoUrl(mailto);
+        setShareOpen(true);
+      }
+    } catch (e) {
+      setSaveErr(e?.response?.data?.error || e?.message || "Failed");
+    } finally {
+      setSaving(false);
+    }
   }
-
-  // create invoice with receipt metadata
-  const payload = {
-    name: invName.trim(),
-    client: invClientName.trim(),
-    recipientEmails: invRecipientEmails.trim(),
-    notes: invNotes.trim(),
-    total: Number(invTotal),
-    status: invStatus,
-    date: invDate,
-    receipt, // url stored in MongoDB
-  };
-
-
-  const { data } = await api.post("/invoices", payload);
-  setInvoices((prev) => [data.invoice, ...prev]);
-  setModalOpen(false);
-} catch (e2) {
-  setSaveErr(e2?.response?.data?.error || e2?.message || "Failed to create invoice");
-} finally {
-  setSaving(false);
-}
-  }
-
 
   return (
-    <div className="dash">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <button className="newInvoiceBtn" onClick={openNewInvoice}>
-          <span className="plus">+</span> New Invoice
-        </button>
-
-        <nav className="nav">
+    <>
+      {/* Tabs */}
+      <div className="tabs">
+        {TABS.map((t) => (
           <button
-            className={`navItem ${sidebarActive === "Home" ? "active" : ""}`}
-            onClick={() => setSidebarActive("Home")}
+            key={t}
+            className={`tab ${activeTab === t ? "active" : ""}`}
+            onClick={() => setActiveTab(t)}
           >
-            <span className="navIcon">🏠</span> Home
+            {t}
           </button>
+        ))}
+      </div>
 
-          <button
-            className={`navItem ${sidebarActive === "Invoices" ? "active" : ""}`}
-            onClick={() => setSidebarActive("Invoices")}
-          >
-            <span className="navIcon">🧾</span> Invoices
-          </button>
-
-          <button
-            className={`navItem ${sidebarActive === "Settings" ? "active" : ""}`}
-            onClick={() => setSidebarActive("Settings")}
-          >
-            <span className="navIcon">⚙️</span> Settings
-          </button>
-        </nav>
-      </aside>
-
-      {/* Main */}
-      <main className="main">
-        {/* Top bar */}
-        <header className="topbar">
-          <h1 className="pageTitle">Invoices</h1>
-
-          <div className="profile" ref={profileRef}>
-            <button className="profileBtn" onClick={() => setProfileOpen((v) => !v)}>
-              <div className="avatar">{initialsFromUser(user)}</div>
-              <div className="profileMeta">
-                <div className="profileName">{displayName}</div>
-              </div>
-              <div className="chev">▾</div>
-            </button>
-
-            {profileOpen && (
-              <div className="profileMenu">
-                <button className="menuItem" onClick={() => setProfileOpen(false)}>
-                  Account
-                </button>
-                <button className="menuItem danger" onClick={onLogout}>
-                  Logout
-                </button>
-              </div>
-            )}
+      {/* Table card */}
+      <section className="card">
+        <div className="tableHeader">
+          <div className="th name">
+            Name <span className="sort">⇅</span>
           </div>
-        </header>
-
-        {/* Tabs */}
-        <div className="tabs">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              className={`tab ${activeTab === t ? "active" : ""}`}
-              onClick={() => setActiveTab(t)}
-            >
-              {t}
-            </button>
-          ))}
+          <div className="th date">
+            Date <span className="sort">⇅</span>
+          </div>
+          <div className="th client">
+            Client <span className="sort">⇅</span>
+          </div>
+          <div className="th price">
+            Price <span className="sort">⇅</span>
+          </div>
+          <div className="th status">Status</div>
+          <div className="th actions" />
         </div>
 
-        {/* Table card */}
-        <section className="card">
-          <div className="tableHeader">
-            <div className="th name">Name <span className="sort">⇅</span></div>
-            <div className="th date">Date <span className="sort">⇅</span></div>
-            <div className="th client">Client <span className="sort">⇅</span></div>
-            <div className="th price">Price <span className="sort">⇅</span></div>
-            <div className="th status">Status</div>
-            <div className="th actions" />
-          </div>
+        <div className="rows">
+          {loading && <div className="empty">Loading invoices…</div>}
+          {!loading && loadErr && <div className="empty">⚠️ {loadErr}</div>}
 
-          <div className="rows">
-            {loading && <div className="empty">Loading invoices…</div>}
-            {!loading && loadErr && <div className="empty">⚠️ {loadErr}</div>}
-
-            {!loading && !loadErr && filteredInvoices.map((inv, idx) => (
+          {!loading &&
+            !loadErr &&
+            filteredInvoices.map((inv, idx) => (
               <div
-              className="row clickable"
-              key={inv._id}
-              role="button"
-              tabIndex={0}
-              onClick={() => nav(`/invoices/${inv._id}`)}
-              onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") nav(`/invoices/${inv._id}`);
-              }}
+                className="row clickable"
+                key={inv._id}
+                role="button"
+                tabIndex={0}
+                onClick={() => nav(`/invoices/${inv._id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") nav(`/invoices/${inv._id}`);
+                }}
               >
-
                 <div className="cell name">
                   <div className={`docIcon color${(idx % 3) + 1}`}>🧾</div>
+
                   <div className="nameBlock">
                     <div className="invTitle">
-                   {inv.name} {inv.receipt?.url ? <span className="clip" title="Has receipt"></span> : null}
-                  </div>
+                      {inv.name}{" "}
+                      {inv.receipt?.url ? <span className="clip" title="Has receipt"></span> : null}
+                    </div>
 
                     <div className="invId">{inv._id.slice(-6).toUpperCase()}</div>
                   </div>
@@ -319,38 +376,35 @@ try {
                 </div>
 
                 <div className="cell actions" style={{ position: "relative" }}>
-  <button
-    className="dots"
-    onClick={(e) => {
-      e.stopPropagation(); 
-      setMenuOpenId((curr) => (curr === inv._id ? null : inv._id));
-    }}
-  >
-    …
-  </button>
+                  <button
+                    className="dots"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpenId((curr) => (curr === inv._id ? null : inv._id));
+                    }}
+                  >
+                    …
+                  </button>
 
-  {menuOpenId === inv._id && (
-       <div
-      className="actionMenu"
-      onClick={(e) => e.stopPropagation()} 
-       >
-      <button onClick={() => updateStatus(inv._id, "Unpaid")}>Mark Unpaid</button>
-      <button onClick={() => updateStatus(inv._id, "Pending")}>Mark Pending</button>
-      <button onClick={() => updateStatus(inv._id, "Paid")}>Mark Paid</button>
-      <button onClick={() => updateStatus(inv._id, "Archived")}>Archive</button>
-      </div>
-      )}
-      </div>
+                  {menuOpenId === inv._id && (
+                    <div className="actionMenu" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => shareExistingInvoice(inv)}>Share link</button>
 
+                      <button onClick={() => updateStatus(inv._id, "Unpaid")}>Mark Unpaid</button>
+                      <button onClick={() => updateStatus(inv._id, "Pending")}>Mark Pending</button>
+                      <button onClick={() => updateStatus(inv._id, "Paid")}>Mark Paid</button>
+                      <button onClick={() => updateStatus(inv._id, "Archived")}>Archive</button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
 
-            {!loading && !loadErr && filteredInvoices.length === 0 && (
-              <div className="empty">No invoices created yet.</div>
-            )}
-          </div>
-        </section>
-      </main>
+          {!loading && !loadErr && filteredInvoices.length === 0 && (
+            <div className="empty">No invoices created yet.</div>
+          )}
+        </div>
+      </section>
 
       {/* New Invoice Modal */}
       {modalOpen && (
@@ -358,64 +412,77 @@ try {
           <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="modalTop">
               <div className="modalTitle">New Invoice</div>
-              <button className="modalClose" onClick={() => setModalOpen(false)}>✕</button>
+              <button className="modalClose" onClick={() => setModalOpen(false)}>
+                ✕
+              </button>
             </div>
 
-            <form className="modalForm" onSubmit={createInvoice}>
+            <form className="modalForm" onSubmit={(e) => e.preventDefault()}>
               <label className="mField">
                 <div className="mLabel">Invoice Title</div>
-                <input className="mInput" value={invName} onChange={(e) => setInvName(e.target.value)} placeholder="Splitting Dinner" />
+                <input
+                  className="mInput"
+                  value={invName}
+                  onChange={(e) => setInvName(e.target.value)}
+                  placeholder="Invoice Title / Subject"
+                />
               </label>
 
-             <input
-              className="mInput"
-              value={invClientName}
-              onChange={(e) => setInvClientName(e.target.value)}
-               placeholder="Adam Smith"
-                 />
-
+              <input
+                className="mInput"
+                value={invClientName}
+                onChange={(e) => setInvClientName(e.target.value)}
+                placeholder="Name of Invoice Recipient"
+              />
 
               <input
-              className="mInput"
-              value={invRecipientEmails}
-              onChange={(e) => setInvRecipientEmails(e.target.value)}
-              placeholder="fake@email.com, fake1@email.com, fake2@email.com"
-                />
+                className="mInput"
+                value={invRecipientEmails}
+                onChange={(e) => setInvRecipientEmails(e.target.value)}
+                placeholder="Email of Recipient(s)"
+              />
 
-
-               <textarea
-               className="mInput"
-               style={{ height: 96, paddingTop: 12, paddingBottom: 12, resize: "vertical" }}
-               value={invNotes}
-               onChange={(e) => setInvNotes(e.target.value)}
-               placeholder="Dinner from Thursday night. You ordered a Martini and the Ribeye."
-               />
-
+              <textarea
+                className="mInput"
+                style={{ height: 96, paddingTop: 12, paddingBottom: 12, resize: "vertical" }}
+                value={invNotes}
+                onChange={(e) => setInvNotes(e.target.value)}
+                placeholder="Invoice Message"
+              />
 
               <label className="mField">
-              <div className="mLabel">Upload Receipt (optional)</div>
-              <input
-              className="mInput"
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => {
-              const f = e.target.files?.[0];
-              setReceiptFile(f || null);
-              setReceiptName(f?.name || "");
-              }}
-             />
-              {receiptName ? <div style={{ fontSize: 12, opacity: 0.7 }}>{receiptName}</div> : null}
-             </label>
+                <div className="mLabel">Upload Receipt (optional)</div>
+                <input
+                  className="mInput"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    setReceiptFile(f || null);
+                    setReceiptName(f?.name || "");
+                  }}
+                />
+                {receiptName ? <div style={{ fontSize: 12, opacity: 0.7 }}>{receiptName}</div> : null}
+              </label>
 
               <div className="mRow">
                 <label className="mField">
                   <div className="mLabel">Date</div>
-                  <input className="mInput" type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} />
+                  <input
+                    className="mInput"
+                    type="date"
+                    value={invDate}
+                    onChange={(e) => setInvDate(e.target.value)}
+                  />
                 </label>
 
                 <label className="mField">
                   <div className="mLabel">Status</div>
-                  <select className="mInput" value={invStatus} onChange={(e) => setInvStatus(e.target.value)}>
+                  <select
+                    className="mInput"
+                    value={invStatus}
+                    onChange={(e) => setInvStatus(e.target.value)}
+                  >
                     <option>Unpaid</option>
                     <option>Pending</option>
                     <option>Paid</option>
@@ -439,17 +506,70 @@ try {
               {saveErr && <div className="mError">⚠️ {saveErr}</div>}
 
               <div className="mActions">
-                <button type="button" className="mBtn ghost" onClick={() => setModalOpen(false)}>
-                  Cancel
+                <button
+                  type="button"
+                  className="mBtn primary"
+                  disabled={saving}
+                  onClick={() => createInvoice("send")}
+                >
+                  {saving ? "Working…" : "Create & Share"}
                 </button>
-                <button type="submit" className="mBtn primary" disabled={saving}>
-                  {saving ? "Creating…" : "Create Invoice"}
+
+                <button
+                  type="button"
+                  className="mBtn ghost"
+                  disabled={saving}
+                  onClick={() => createInvoice("save")}
+                >
+                  {saving ? "Working…" : "Create & Save"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+
+      {/* Share Modal */}
+      {shareOpen && (
+        <div className="modalBackdrop" onMouseDown={() => setShareOpen(false)}>
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modalTop">
+              <div className="modalTitle">Share Invoice</div>
+              <button className="modalClose" onClick={() => setShareOpen(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modalForm" style={{ gap: 10 }}>
+              <div className="mLabel">Share link (copied to clipboard)</div>
+              <input className="mInput" value={shareUrl} readOnly />
+
+              <div className="mActions">
+                <button
+                  type="button"
+                  className="mBtn ghost"
+                  onClick={async () => {
+                    if (shareUrl && navigator.clipboard) {
+                      await navigator.clipboard.writeText(shareUrl);
+                    }
+                    alert("Copied!");
+                  }}
+                >
+                  Copy Link
+                </button>
+
+                <button
+                  type="button"
+                  className="mBtn primary"
+                  onClick={() => (window.location.href = mailtoUrl)}
+                >
+                  Share as Email
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

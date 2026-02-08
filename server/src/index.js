@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import authRoutes from "./routes/auth.routes.js";
 import invoiceRoutes from "./routes/invoice.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import publicRoutes from "./routes/public.routes.js";
 
 dotenv.config();
 
@@ -16,9 +18,12 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+
 app.use("/auth", authRoutes);
 app.use("/invoices", invoiceRoutes);
 app.use("/uploads", uploadRoutes);
+app.use("/users", userRoutes);
+app.use("/public", publicRoutes);
 
 const PORT = process.env.PORT || 5050;
 
